@@ -24,8 +24,12 @@ public class Actor implements HttpHandler{
 	
 	public void handle(HttpExchange r) {
         try {
-            if (r.getRequestMethod().equals("GET")) {
-                handlePost(r);
+            if (r.getRequestMethod().equals("PUT")) {
+            	addActor(r);
+            }else if (r.getRequestMethod().equals("GET")) {
+            	System.out.println("get actor");
+            	getActor(r);
+            	
             }else{
                 r.sendResponseHeaders(404, -1);
             }
@@ -34,7 +38,7 @@ public class Actor implements HttpHandler{
         }
     }
 	
-	public void handlePost(HttpExchange r) throws IOException, JSONException{
+	public void addActor(HttpExchange r) throws IOException, JSONException{
         
 		String body = DBConnect.convert(r.getRequestBody());
         JSONObject deserialized = new JSONObject(body);
@@ -68,6 +72,48 @@ public class Actor implements HttpHandler{
             statusCode = 500;
         }
         r.sendResponseHeaders(statusCode, -1);
+    }
+	
+	public void getActor(HttpExchange r) throws IOException, JSONException {
+		
+		String body = DBConnect.convert(r.getRequestBody());
+        JSONObject deserialized = new JSONObject(body);
+        int statusCode = 0;
+        String response = null;
+        String actorId;
+        
+        if (deserialized.has("actorId"))
+        	actorId = deserialized.getString("actorId");
+        else
+        	actorId = "";
+        
+        System.out.println("OUTPUTS: actorId: "+actorId);
+        
+       
+        try (Session session = DBConnect.driver.session()) {
+            try (Transaction tx = session.beginTransaction()) {
+            	StatementResult results = tx.run("MATCH (a:Actor) WHERE a.actorId = '"+actorId+"' RETURN a.name AS name, a.actorId AS actorId" );
+            	Record record = results.next();
+            	statusCode = 200;
+                response = record.get( "name" ).asString() + " " +  record.get("actorId").asString() ;
+            } catch( Exception e ) {
+                System.err.println("Caught Exception: " + e.getMessage());
+                response = e.getMessage();
+                statusCode = 500;
+                session.close();
+            }
+        } catch( Exception e ) {
+            System.err.println("Caught Exception: " + e.getMessage());
+            response = e.getMessage();
+            statusCode = 500;
+        }
+        
+        r.sendResponseHeaders(statusCode, response.length());
+        OutputStream os = r.getResponseBody();
+        os.write(response.getBytes());
+        os.close();
+        
+        
     }
 
 }
